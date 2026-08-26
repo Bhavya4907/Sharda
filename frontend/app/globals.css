@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+:root {
+  --background: #030712;
+  --foreground: #f9fafb;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #111827;
+}
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}
+
+/* Prose customisation for dark mode */
+.prose {
+  color: #d1d5db;
+}
+.prose h1, .prose h2, .prose h3 {
+  color: #f9fafb;
+}
+.prose strong {
+  color: #fb923c;
+}
+.prose code {
+  color: #fbbf24;
+  background: #1f2937;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.875em;
+}
+.prose ul > li::marker {
+  color: #f97316;
+}
