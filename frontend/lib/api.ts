@@ -210,3 +210,75 @@ export interface GraphEdge {
   source: string;
   target: string;
 }
+
+// ── Exam / Revision Mode ───────────────────────────────────────────────────
+
+export interface ExamConfig {
+  total_marks: number;
+  duration_minutes: number;
+  mcq_count: number;
+  short_count: number;
+  long_count: number;
+  selected_topics: string[];
+}
+
+export interface ExamQuestion {
+  id: string;
+  type: "mcq" | "short_answer" | "long_answer";
+  marks: number;
+  question: string;
+  options?: string[];
+  correct_answer: string;
+  topic: string;
+  rubric: string;
+}
+
+export interface ExamPaper {
+  id: string;
+  title: string;
+  total_marks: number;
+  duration_minutes: number;
+  questions: ExamQuestion[];
+}
+
+export interface ExamGradedQuestion {
+  earned_marks: number;
+  max_marks: number;
+  feedback: string;
+  correct_answer: string;
+  user_answer: string;
+  rubric: string;
+}
+
+export interface ExamGradedResult {
+  score_earned: number;
+  total_marks: number;
+  percentage: number;
+  violations_count: number;
+  graded_questions: Record<string, ExamGradedQuestion>;
+  topic_gaps: string[];
+  overall_feedback: string;
+}
+
+export async function generateExam(sessionId: string, config: ExamConfig) {
+  return request<{ exam: ExamPaper }>(`/session/${sessionId}/exam/generate`, {
+    method: "POST",
+    body: JSON.stringify(config),
+  });
+}
+
+export async function getActiveExam(sessionId: string) {
+  return request<{ exam: ExamPaper | null }>(`/session/${sessionId}/exam/active`);
+}
+
+export async function gradeExam(
+  sessionId: string,
+  answers: Record<string, string>,
+  violationsCount: number
+) {
+  return request<ExamGradedResult>(`/session/${sessionId}/exam/grade`, {
+    method: "POST",
+    body: JSON.stringify({ answers, violations_count: violationsCount }),
+  });
+}
+

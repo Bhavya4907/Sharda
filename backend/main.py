@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from models.schemas import (
     SessionData, ChatMessage,
     ChatRequest, FeynmanRequest, QuizGradeRequest, FlashcardRateRequest,
-    UploadTextRequest,
+    UploadTextRequest, ExamConfig, ExamSubmissionRequest,
 )
 from services import pdf_parser, gemini_service, storage
 from services.spaced_repetition import update_card, mastery_from_cards
@@ -224,6 +224,52 @@ def feynman(session_id: str, body: FeynmanRequest):
         concept, session.raw_text, body.explanation
     )
     return result
+
+
+# ─── Exam / Revision Mode ───────────────────────────────────────────────────
+
+@app.post("/session/{session_id}/exam/generate")
+def generate_exam(session_id: str, body: ExamConfig):
+    session = _get_or_404(session_id)
+    exam_paper = gemini_service.generate_exam_paper(
+        session.raw_text, session.concepts, body
+    )
+    session.active_exam = exam_paper
+    storage.save_session(session)
+    return {"exam": exam_paper.model_dump()}
+
+
+@app.get("/session/{session_id}/exam/active")
+def get_active_exam(session_id: str):
+    session = _get_or_404(session_id)
+    if not session.active_exam:
+        return {"exam": None}
+    return {"exam": session.active_exam.model_dump()}
+
+
+@app.post("/session/{session_id}/exam/grade")
+def grade_exam(session_id: str, body: ExamSubmissionRequest):
+    session = _get_or_404(session_id)
+    if not session.active_exam:
+        raise HTTPException(400, "No active exam paper found to grade")
+
+    results = gemini_service.grade_exam_paper(
+        session.active_exam.questions, body.answers, body.violations_count
+    )
+
+    # Update session mastery based on exam scores
+    for q in session.active_exam.questions:
+        q_result = results["graded_questions"].get(q.id)
+        if q_result:
+            earned = q_result["earned_marks"]
+            max_m = q_result["max_marks"]
+            score_ratio = (earned / max_m) if max_m > 0 else 0.0
+            current = session.mastery.get(q.topic, 0.5)
+            # Update mastery with a 50% weight on the formal exam result
+            session.mastery[q.topic] = round(current * 0.5 + score_ratio * 0.5, 3)
+
+    storage.save_session(session)
+    return results
 
 
 # ─── Mastery ─────────────────────────────────────────────────────────────────

@@ -54,6 +54,7 @@ class SessionData(BaseModel):
     flashcards: list[Flashcard] = []
     quiz_questions: list[QuizQuestion] = []
     chat_history: list[ChatMessage] = []
+    active_exam: Optional[ExamPaper] = None
     mastery: dict[str, float] = {}    # topic -> 0.0–1.0
     created_at: str
 
@@ -79,3 +80,38 @@ class QuizGradeRequest(BaseModel):
 
 class FlashcardRateRequest(BaseModel):
     rating: FlashcardRating
+
+
+# Exam / Revision Mode Models
+class ExamConfig(BaseModel):
+    total_marks: int = 20
+    duration_minutes: int = 15
+    mcq_count: int = 5          # 1 mark each by default
+    short_count: int = 3        # 3-5 marks each
+    long_count: int = 1         # 5-10 marks each
+    selected_topics: list[str] = []
+
+
+class ExamQuestion(BaseModel):
+    id: str
+    type: str                  # "mcq", "short_answer", "long_answer"
+    marks: int
+    question: str
+    options: Optional[list[str]] = None
+    correct_answer: str
+    topic: str
+    rubric: str                # Grading guidelines
+
+
+class ExamPaper(BaseModel):
+    id: str
+    title: str
+    total_marks: int
+    duration_minutes: int
+    questions: list[ExamQuestion]
+
+
+class ExamSubmissionRequest(BaseModel):
+    answers: dict[str, str]       # question_id -> user_answer
+    violations_count: int = 0
+

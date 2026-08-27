@@ -10,7 +10,8 @@ from google.genai import types
 from dotenv import load_dotenv
 
 from models.schemas import (
-    Concept, Flashcard, QuizQuestion, ChatMessage
+    Concept, Flashcard, QuizQuestion, ChatMessage,
+    ExamConfig, ExamQuestion, ExamPaper
 )
 
 load_dotenv()
@@ -290,3 +291,170 @@ STUDENT'S EXPLANATION:
 "{user_explanation}"
 """
     return _json_generate(prompt)
+
+
+# ─── Exam / Revision Mode ───────────────────────────────────────────────────
+
+def generate_exam_paper(
+    study_text: str,
+    concepts: list[Concept],
+    config: ExamConfig
+) -> ExamPaper:
+    """
+    Generates a structured exam paper according to user's desired pattern,
+    marks breakdown, and duration.
+    """
+    concept_names = ", ".join(
+        config.selected_topics if config.selected_topics else [c.name for c in concepts]
+    )
+
+    prompt = f"""Generate a formal exam paper based on the study material.
+Target breakdown:
+- MCQs: {config.mcq_count} questions (1 mark each)
+- Short Answer: {config.short_count} questions (3 marks each)
+- Long / Comprehensive Answer: {config.long_count} questions (5 marks each)
+- Total Marks Goal: Approx {config.total_marks} Marks
+- Duration: {config.duration_minutes} Minutes
+- Topics to cover: {concept_names}
+
+Return a JSON object with keys:
+- "title": A descriptive title for this revision exam paper
+- "questions": JSON array of question objects, each containing:
+  - "type": "mcq" | "short_answer" | "long_answer"
+  - "marks": integer (1 for mcq, 3 for short_answer, 5 for long_answer)
+  - "question": the clear question statement
+  - "options": (MCQ only) array of 4 strings e.g. ["A) ...", "B) ...", "C) ...", "D) ..."] or null
+  - "correct_answer": full correct answer / detailed model answer
+  - "topic": concept name this targets
+  - "rubric": 1-2 sentence grading rubric for awarding marks
+
+STUDY MATERIAL:
+---
+{study_text[:12000]}
+---
+"""
+    data = _json_generate(prompt)
+
+    questions = []
+    total_calculated_marks = 0
+
+    for item in data.get("questions", []):
+        marks = item.get("marks", 1 if item.get("type") == "mcq" else 3)
+        total_calculated_marks += marks
+        questions.append(ExamQuestion(
+            id=str(uuid.uuid4()),
+            type=item.get("type", "mcq"),
+            marks=marks,
+            question=item.get("question", ""),
+            options=item.get("options"),
+            correct_answer=item.get("correct_answer", ""),
+            topic=item.get("topic", "General"),
+            rubric=item.get("rubric", "Award full marks for accurate concepts."),
+        ))
+
+    return ExamPaper(
+        id=str(uuid.uuid4()),
+        title=data.get("title", f"Revision Exam ({config.total_marks} Marks)"),
+        total_marks=total_calculated_marks if total_calculated_marks > 0 else config.total_marks,
+        duration_minutes=config.duration_minutes,
+        questions=questions,
+    )
+
+
+def grade_exam_paper(
+    questions: list[ExamQuestion],
+    answers: dict[str, str],
+    violations_count: int = 0
+) -> dict:
+    """
+    Evaluates student's exam submission across MCQs, Short Answers, and Long Answers.
+    Takes tab switch / integrity violations into account if needed.
+    """
+    exam_submission_batch = []
+    total_earned = 0.0
+    total_max = sum(q.marks for q in questions)
+    graded_questions = {}
+
+    for q in questions:
+        user_ans = answers.get(q.id, "").strip()
+
+        if q.type == "mcq":
+            correct = user_ans.lower() == q.correct_answer.strip().lower()
+            earned = float(q.marks) if correct else 0.0
+            total_earned += earned
+            graded_questions[q.id] = {
+                "earned_marks": earned,
+                "max_marks": q.marks,
+                "feedback": "Correct selection!" if correct else f"Incorrect. Correct answer: {q.correct_answer}",
+                "correct_answer": q.correct_answer,
+                "user_answer": user_ans,
+                "rubric": q.rubric
+            }
+        else:
+            exam_submission_batch.append({
+                "id": q.id,
+                "type": q.type,
+                "question": q.question,
+                "max_marks": q.marks,
+                "rubric": q.rubric,
+                "model_answer": q.correct_answer,
+                "user_answer": user_ans,
+                "topic": q.topic,
+            })
+
+    if exam_submission_batch:
+        prompt = f"""Grade these descriptive exam responses strictly according to the mark rubrics and model answers provided.
+Return a JSON array of graded results.
+
+For each item in the input array, return an object with:
+- "id": question id (preserve exactly)
+- "earned_marks": float or int between 0 and max_marks
+- "feedback": constructive 2-3 sentence breakdown of what was answered well, what was partial, and where marks were lost.
+- "topic_gap": boolean (true if student showed clear knowledge gap on this topic)
+
+EXAM SUBMISSIONS TO GRADE:
+{json.dumps(exam_submission_batch, indent=2)}
+"""
+        graded_batch = _json_generate(prompt)
+
+        for item in graded_batch:
+            q_obj = next((q for q in questions if q.id == item["id"]), None)
+            if q_obj:
+                earned = float(item.get("earned_marks", 0))
+                total_earned += earned
+                graded_questions[item["id"]] = {
+                    "earned_marks": earned,
+                    "max_marks": q_obj.marks,
+                    "feedback": item.get("feedback", ""),
+                    "correct_answer": q_obj.correct_answer,
+                    "user_answer": answers.get(q_obj.id, ""),
+                    "rubric": q_obj.rubric
+                }
+
+    percentage = round((total_earned / total_max * 100), 1) if total_max > 0 else 0.0
+
+    # Summary analysis
+    topic_gaps = list(set([
+        q.topic for q in questions if graded_questions.get(q.id, {}).get("earned_marks", 0) < (q.marks * 0.6)
+    ]))
+
+    summary_prompt = f"""Generate a brief overall exam feedback summary for a student.
+Score achieved: {total_earned} / {total_max} Marks ({percentage}%)
+Tab switch / focus warnings during exam: {violations_count}
+Identified weak topics: {", ".join(topic_gaps) if topic_gaps else "None"}
+
+Return JSON object:
+- "overall_feedback": 2-3 sentence summary of overall exam performance, key strengths, and revision advice.
+"""
+    summary_data = _json_generate(summary_prompt)
+
+    return {
+        "score_earned": total_earned,
+        "total_marks": total_max,
+        "percentage": percentage,
+        "violations_count": violations_count,
+        "graded_questions": graded_questions,
+        "topic_gaps": topic_gaps,
+        "overall_feedback": summary_data.get("overall_feedback", "Great effort on completing your revision exam!"),
+    }
+

@@ -14,10 +14,11 @@ import QuizMode from "@/components/QuizMode";
 import SocraticChat from "@/components/SocraticChat";
 import FeynmanMode from "@/components/FeynmanMode";
 import MasteryTracker from "@/components/MasteryTracker";
+import ReviseExamMode from "@/components/ReviseExamMode";
 
 const KnowledgeGraph = dynamic(() => import("@/components/KnowledgeGraph"), { ssr: false });
 
-type Tab = "overview" | "flashcards" | "quiz" | "chat" | "feynman" | "mastery";
+type Tab = "overview" | "flashcards" | "quiz" | "chat" | "feynman" | "mastery" | "revise";
 
 const TABS: { id: Tab; label: string; emoji: string }[] = [
   { id: "overview", label: "Overview", emoji: "🧠" },
@@ -26,6 +27,7 @@ const TABS: { id: Tab; label: string; emoji: string }[] = [
   { id: "chat", label: "Socratic Chat", emoji: "💬" },
   { id: "feynman", label: "Feynman", emoji: "🔬" },
   { id: "mastery", label: "Mastery", emoji: "📊" },
+  { id: "revise", label: "Revise Exam", emoji: "📝" },
 ];
 
 export default function StudyPage() {
@@ -237,6 +239,11 @@ export default function StudyPage() {
         {/* Mastery */}
         {tab === "mastery" && (
           <MasteryTracker mastery={mastery} weakTopics={weakTopics} />
+        )}
+
+        {/* Revise Exam */}
+        {tab === "revise" && (
+          <ReviseExamMode sessionId={id} concepts={concepts} />
         )}
       </main>
     </div>
