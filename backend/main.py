@@ -75,29 +75,16 @@ def _create_session(text: str, filename: str) -> dict:
         id=session_id,
         filename=filename,
         raw_text=text,
+        tldr=f"Study session for {filename}",
         created_at=datetime.utcnow().isoformat(),
     )
-    storage.save_session(session)
-
-    # Kick off AI analysis synchronously (fast enough for demo)
-    try:
-        summary, tldr, concepts = gemini_service.generate_summary(text)
-    except ValueError as e:
-        # Missing or invalid API key — surface a clean error to the frontend
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"AI service error: {str(e)}")
-
-    session.summary = summary
-    session.tldr = tldr
-    session.concepts = concepts
     storage.save_session(session)
 
     return {
         "session_id": session_id,
         "filename": filename,
-        "tldr": tldr,
-        "concept_count": len(concepts),
+        "tldr": session.tldr,
+        "concept_count": 0,
     }
 
 
@@ -112,6 +99,20 @@ def get_session(session_id: str):
 @app.get("/session/{session_id}/summary")
 def get_summary(session_id: str):
     session = _get_or_404(session_id)
+
+    # Generate summary & concepts on demand if not yet generated
+    if not session.summary or not session.concepts:
+        try:
+            summary, tldr, concepts = gemini_service.generate_summary(session.raw_text)
+            session.summary = summary
+            session.tldr = tldr
+            session.concepts = concepts
+            storage.save_session(session)
+        except ValueError as e:
+            raise HTTPException(status_code=503, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"AI service error: {str(e)}")
+
     return {
         "summary": session.summary,
         "tldr": session.tldr,
