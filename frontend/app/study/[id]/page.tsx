@@ -15,13 +15,15 @@ import SocraticChat from "@/components/SocraticChat";
 import FeynmanMode from "@/components/FeynmanMode";
 import MasteryTracker from "@/components/MasteryTracker";
 import ReviseExamMode from "@/components/ReviseExamMode";
+import NotesMaker from "@/components/NotesMaker";
 
 const KnowledgeGraph = dynamic(() => import("@/components/KnowledgeGraph"), { ssr: false });
 
-type Tab = "overview" | "flashcards" | "quiz" | "chat" | "feynman" | "mastery" | "revise";
+type Tab = "overview" | "notes" | "flashcards" | "quiz" | "chat" | "feynman" | "mastery" | "revise";
 
 const TABS: { id: Tab; label: string; emoji: string }[] = [
   { id: "overview", label: "Overview", emoji: "🧠" },
+  { id: "notes", label: "AI Notes", emoji: "📚" },
   { id: "flashcards", label: "Flashcards", emoji: "🃏" },
   { id: "quiz", label: "Quiz", emoji: "❓" },
   { id: "chat", label: "Socratic Chat", emoji: "💬" },
@@ -126,11 +128,11 @@ export default function StudyPage() {
       <header className="border-b border-gray-800 px-6 py-4 flex items-center gap-3 sticky top-0 bg-gray-950/95 backdrop-blur z-10">
         <button
           onClick={() => router.push("/")}
-          className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-sm font-bold shrink-0"
+          className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-sm font-bold text-white shadow-md shrink-0"
         >
-          P
+          S
         </button>
-        <span className="font-semibold tracking-tight">Prometheus</span>
+        <span className="font-semibold tracking-tight">Sharda</span>
         <span className="text-gray-600 mx-1">·</span>
         {tldr ? (
           <span className="text-sm text-gray-400 truncate max-w-sm">{tldr}</span>
@@ -204,6 +206,11 @@ export default function StudyPage() {
               </>
             )}
           </div>
+        )}
+
+        {/* AI Notes */}
+        {tab === "notes" && (
+          <NotesMaker sessionId={id} concepts={concepts} />
         )}
 
         {/* Flashcards */}

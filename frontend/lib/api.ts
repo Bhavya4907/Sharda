@@ -4,15 +4,26 @@ async function request<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...options.headers },
-    ...options,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || "Request failed");
+  const headers = { "Content-Type": "application/json", ...options.headers };
+  try {
+    const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "Request failed");
+    }
+    return res.json();
+  } catch (e: unknown) {
+    // Fallback retry via Next.js same-origin proxy if cross-port fetch fails
+    if (typeof window !== "undefined" && !process.env.NEXT_PUBLIC_API_URL) {
+      const proxyRes = await fetch(`/api-backend${path}`, { ...options, headers });
+      if (!proxyRes.ok) {
+        const err = await proxyRes.json().catch(() => ({ detail: proxyRes.statusText }));
+        throw new Error(err.detail || "Request failed");
+      }
+      return proxyRes.json();
+    }
+    throw e;
   }
-  return res.json();
 }
 
 // ── Upload ──────────────────────────────────────────────────────────────────
@@ -20,15 +31,27 @@ async function request<T>(
 export async function uploadPDF(file: File) {
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(`${API_BASE}/upload/pdf`, {
-    method: "POST",
-    body: form,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || "Upload failed");
+  try {
+    const res = await fetch(`${API_BASE}/upload/pdf`, {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "Upload failed");
+    }
+    return res.json();
+  } catch {
+    const proxyRes = await fetch(`/api-backend/upload/pdf`, {
+      method: "POST",
+      body: form,
+    });
+    if (!proxyRes.ok) {
+      const err = await proxyRes.json().catch(() => ({ detail: proxyRes.statusText }));
+      throw new Error(err.detail || "Upload failed");
+    }
+    return proxyRes.json();
   }
-  return res.json();
 }
 
 export async function uploadText(text: string, filename?: string) {
@@ -281,4 +304,31 @@ export async function gradeExam(
     body: JSON.stringify({ answers, violations_count: violationsCount }),
   });
 }
+
+// ── AI Notes Maker ──────────────────────────────────────────────────────────
+
+export interface NotesData {
+  id: string;
+  style: "short" | "long" | "outline" | "glossary";
+  title: string;
+  markdown_content: string;
+  key_takeaways: string[];
+  created_at: string;
+}
+
+export async function generateNotes(
+  sessionId: string,
+  style: "short" | "long" | "outline" | "glossary",
+  selectedTopics: string[] = []
+) {
+  return request<{ notes: NotesData }>(`/session/${sessionId}/notes`, {
+    method: "POST",
+    body: JSON.stringify({ style, selected_topics: selectedTopics }),
+  });
+}
+
+export async function getNotes(sessionId: string, style: string = "short") {
+  return request<{ notes: NotesData | null }>(`/session/${sessionId}/notes?style=${style}`);
+}
+
 

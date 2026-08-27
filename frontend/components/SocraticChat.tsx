@@ -45,7 +45,7 @@ export default function SocraticChat({ sessionId, initialHistory }: Props) {
         {history.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 space-y-3">
             <div className="text-4xl">🦉</div>
-            <p className="font-medium text-gray-400">Prometheus the Socratic Tutor</p>
+            <p className="font-medium text-gray-400">Sharda the Socratic Tutor</p>
             <p className="text-sm max-w-xs">
               Ask me anything about your study material. I won&apos;t just give you the answer — I&apos;ll help you <em>think</em> through it.
             </p>
@@ -58,8 +58,8 @@ export default function SocraticChat({ sessionId, initialHistory }: Props) {
             className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
             {msg.role === "assistant" && (
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-xs font-bold shrink-0 mr-2 mt-0.5">
-                P
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-xs font-bold text-white shrink-0 mr-2 mt-0.5 shadow-sm">
+                S
               </div>
             )}
             <div
@@ -76,8 +76,8 @@ export default function SocraticChat({ sessionId, initialHistory }: Props) {
 
         {loading && (
           <div className="flex justify-start">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-xs font-bold shrink-0 mr-2">
-              P
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-xs font-bold text-white shrink-0 mr-2 shadow-sm">
+              S
             </div>
             <div className="bg-gray-800 rounded-2xl rounded-tl-sm px-4 py-3">
               <div className="flex gap-1.5 items-center h-4">
@@ -102,7 +102,7 @@ export default function SocraticChat({ sessionId, initialHistory }: Props) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()}
-          placeholder="Ask a question or respond to Prometheus..."
+          placeholder="Ask a question or respond to Sharda..."
           className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors"
         />
         <button

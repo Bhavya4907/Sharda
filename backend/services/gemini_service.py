@@ -5,13 +5,15 @@ Uses google-genai SDK with Gemini 2.5 Flash (free tier).
 import json
 import os
 import uuid
+from datetime import datetime
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 
 from models.schemas import (
     Concept, Flashcard, QuizQuestion, ChatMessage,
-    ExamConfig, ExamQuestion, ExamPaper
+    ExamConfig, ExamQuestion, ExamPaper,
+    NotesRequest, NotesData
 )
 
 load_dotenv()
@@ -222,7 +224,7 @@ Questions to grade:
 
 # ─── Socratic Chat ────────────────────────────────────────────────────────────
 
-SOCRATIC_SYSTEM = """You are Prometheus, a Socratic AI tutor. You have been given study material and your job is to help the student TRULY understand it — not just give them answers.
+SOCRATIC_SYSTEM = """You are Sharda, a Socratic AI tutor. You have been given study material and your job is to help the student TRULY understand it — not just give them answers.
 
 CORE RULES:
 1. NEVER directly answer a question the student can figure out themselves. Instead, ask a guiding question that leads them toward the answer.
@@ -254,7 +256,7 @@ CONVERSATION HISTORY:
 
 USER: {user_message}
 
-Respond as Prometheus the Socratic tutor."""
+Respond as Sharda the Socratic tutor."""
 
     return _generate(prompt, system=SOCRATIC_SYSTEM)
 
@@ -457,4 +459,88 @@ Return JSON object:
         "topic_gaps": topic_gaps,
         "overall_feedback": summary_data.get("overall_feedback", "Great effort on completing your revision exam!"),
     }
+
+
+# ─── AI Notes Maker ──────────────────────────────────────────────────────────
+
+def generate_custom_notes(
+    study_text: str,
+    concepts: list[Concept],
+    request_data: NotesRequest
+) -> NotesData:
+    """
+    Generates notes in specified style:
+    - "short": Concise High-Yield Bullet Notes
+    - "long": Comprehensive Structured Textbook-Style Notes
+    - "outline": Hierarchical Mind Map Outline
+    - "glossary": Key Terms, Formulas & Definitions Sheet
+    """
+    topics_filter = (
+        ", ".join(request_data.selected_topics)
+        if request_data.selected_topics
+        else "All topics in document"
+    )
+
+    style_instructions = {
+        "short": """Create Concise High-Yield Revision Notes.
+Structure with:
+- Clear ## Section Headings
+- High-impact bullet points
+- Key formulas/equations highlighted in code blocks
+- Bold key terms
+Keep it brief, dense with facts, perfect for quick revision right before an exam.""",
+
+        "long": """Create Comprehensive In-Depth Notes.
+Structure with:
+- Full # Title & Executive Overview
+- Detailed ## Subsections covering every key mechanism, process, and concept in detail
+- Markdown tables comparing related concepts where applicable
+- Real-world examples & thorough step-by-step explanations
+- Important takeaways highlighted in blockquotes (> Note: ...)""",
+
+        "outline": """Create a Hierarchical Tree Outline (Mind Map Style).
+Structure using deeply nested Markdown lists (indentation level 1, 2, 3, 4):
+- 📁 Category / Main Topic
+  - 🔹 Core Concept
+    - 💡 Key mechanism / detail
+      - 📌 Example or exception""",
+
+        "glossary": """Create a Key Terms, Definitions & Formula Cheat-Sheet.
+Structure with:
+- ## Key Terminology & Definitions (formatted as **Term**: Clear 1-2 sentence definition)
+- ## Formulas & Core Principles (with explanation of variables)
+- ## Crucial Facts to Memorize"""
+    }
+
+    instruction = style_instructions.get(request_data.style, style_instructions["short"])
+
+    prompt = f"""You are an expert academic note-maker. Generate study notes based on the provided material.
+
+STYLE: {request_data.style.upper()}
+TOPICS FOCUS: {topics_filter}
+
+FORMATTING INSTRUCTIONS:
+{instruction}
+
+Return a JSON object with keys:
+- "title": A descriptive title for this note sheet
+- "markdown_content": Full markdown notes formatted perfectly with headings, bullets, codeblocks, etc.
+- "key_takeaways": Array of 3-5 bullet strings summarizing the most vital points from these notes.
+
+STUDY MATERIAL:
+---
+{study_text[:12000]}
+---
+"""
+    data = _json_generate(prompt)
+
+    return NotesData(
+        id=str(uuid.uuid4()),
+        style=request_data.style,
+        title=data.get("title", f"AI Notes ({request_data.style.capitalize()})"),
+        markdown_content=data.get("markdown_content", ""),
+        key_takeaways=data.get("key_takeaways", []),
+        created_at=datetime.utcnow().isoformat(),
+    )
+
 

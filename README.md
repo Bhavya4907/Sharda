@@ -1,15 +1,15 @@
-# Prometheus 🔥
+# Sharda ✨
 ## AI-Powered Study Companion
 
 > *Upload your notes. Let AI teach you back.*
 
-Prometheus transforms passive study material into **active learning experiences** using proven learning science — not just a chatbot wrapper.
+Sharda transforms passive study material into **active learning experiences** using proven learning science — not just a chatbot wrapper.
 
 ---
 
 ## What makes it different from NotebookLM?
 
-| Feature | NotebookLM | Prometheus |
+| Feature | NotebookLM | Sharda |
 |---|---|---|
 | Chat about content | ✅ | ✅ |
 | Summary | ✅ | ✅ |
@@ -18,6 +18,8 @@ Prometheus transforms passive study material into **active learning experiences*
 | **Socratic Tutor Mode** | ❌ | ✅ |
 | **Feynman Technique Grader** | ❌ | ✅ |
 | **Mastery Tracking** | ❌ | ✅ |
+| **Custom Timed Exam Generator** | ❌ | ✅ |
+| **AI Notes Maker (Short/Long)** | ❌ | ✅ |
 
 ---
 

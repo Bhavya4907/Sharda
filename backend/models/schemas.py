@@ -55,6 +55,7 @@ class SessionData(BaseModel):
     quiz_questions: list[QuizQuestion] = []
     chat_history: list[ChatMessage] = []
     active_exam: Optional[ExamPaper] = None
+    generated_notes: dict[str, NotesData] = {}
     mastery: dict[str, float] = {}    # topic -> 0.0–1.0
     created_at: str
 
@@ -114,4 +115,20 @@ class ExamPaper(BaseModel):
 class ExamSubmissionRequest(BaseModel):
     answers: dict[str, str]       # question_id -> user_answer
     violations_count: int = 0
+
+
+# AI Notes Maker Models
+class NotesRequest(BaseModel):
+    style: str = "short"         # "short", "long", "outline", "glossary"
+    selected_topics: list[str] = []
+
+
+class NotesData(BaseModel):
+    id: str
+    style: str
+    title: str
+    markdown_content: str
+    key_takeaways: list[str] = []
+    created_at: str
+
 

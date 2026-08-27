@@ -5,9 +5,9 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Prometheus — AI Study Companion",
+  title: "Sharda — AI Study Companion",
   description:
-    "Upload your notes, let AI teach you back. Powered by spaced repetition, Socratic learning, and the Feynman technique.",
+    "Upload your notes, let AI teach you back. Powered by spaced repetition, Socratic learning, Feynman technique, and custom exam revision.",
 };
 
 export default function RootLayout({

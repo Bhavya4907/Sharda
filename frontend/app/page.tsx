@@ -55,10 +55,10 @@ export default function HomePage() {
     <div className="min-h-screen flex flex-col">
       {/* Header */}
       <header className="border-b border-gray-800 px-6 py-4 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-sm font-bold">
-          P
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-sm font-bold text-white shadow-md">
+          S
         </div>
-        <span className="font-semibold text-lg tracking-tight">Prometheus</span>
+        <span className="font-semibold text-lg tracking-tight">Sharda</span>
         <span className="ml-2 text-xs text-gray-500 border border-gray-700 rounded-full px-2 py-0.5">
           AI Study Companion
         </span>
@@ -74,7 +74,7 @@ export default function HomePage() {
             </span>
           </h1>
           <p className="text-gray-400 text-lg">
-            Prometheus uses spaced repetition, Socratic questioning, and the
+            Sharda uses spaced repetition, Socratic questioning, and the
             Feynman technique — proven learning science that NotebookLM ignores.
           </p>
         </div>

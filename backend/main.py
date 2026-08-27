@@ -1,29 +1,44 @@
 """
-Prometheus Backend — FastAPI application.
+Sharda Backend — FastAPI application.
 All routes for the AI-powered study companion.
 """
 import uuid
 from datetime import datetime, date
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from models.schemas import (
     SessionData, ChatMessage,
     ChatRequest, FeynmanRequest, QuizGradeRequest, FlashcardRateRequest,
-    UploadTextRequest, ExamConfig, ExamSubmissionRequest,
+    UploadTextRequest, ExamConfig, ExamSubmissionRequest, NotesRequest,
 )
 from services import pdf_parser, gemini_service, storage
 from services.spaced_repetition import update_card, mastery_from_cards
 
-app = FastAPI(title="Prometheus API", version="1.0.0")
+app = FastAPI(title="Sharda API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ],
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Server error: {str(exc)}"},
+    )
 
 
 # ─── Upload ───────────────────────────────────────────────────────────────────
@@ -270,6 +285,29 @@ def grade_exam(session_id: str, body: ExamSubmissionRequest):
 
     storage.save_session(session)
     return results
+
+
+# ─── AI Notes Maker ──────────────────────────────────────────────────────────
+
+@app.post("/session/{session_id}/notes")
+def generate_notes(session_id: str, body: NotesRequest):
+    session = _get_or_404(session_id)
+    if not getattr(session, "generated_notes", None):
+        session.generated_notes = {}
+    notes_data = gemini_service.generate_custom_notes(
+        session.raw_text, session.concepts, body
+    )
+    session.generated_notes[notes_data.style] = notes_data
+    storage.save_session(session)
+    return {"notes": notes_data.model_dump()}
+
+
+@app.get("/session/{session_id}/notes")
+def get_notes(session_id: str, style: str = "short"):
+    session = _get_or_404(session_id)
+    gen_notes = getattr(session, "generated_notes", {}) or {}
+    notes = gen_notes.get(style)
+    return {"notes": notes.model_dump() if notes else None}
 
 
 # ─── Mastery ─────────────────────────────────────────────────────────────────

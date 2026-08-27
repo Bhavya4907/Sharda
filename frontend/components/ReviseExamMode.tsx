@@ -120,7 +120,7 @@ export default function ReviseExamMode({ sessionId, concepts }: Props) {
       setViolations((v) => {
         const nextV = v + 1;
         setWarningMessage(
-          `⚠️ Window focus lost! (Violation #${nextV}). Keep Prometheus active during your timed exam.`
+          `⚠️ Window focus lost! (Violation #${nextV}). Keep Sharda active during your timed exam.`
         );
         setShowWarningModal(true);
         return nextV;
