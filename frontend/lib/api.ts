@@ -1,8 +1,26 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
+function extractSessionId(path: string): string | null {
+  const match = path.match(/\/session\/([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : null;
+}
+
+export function updateLocalSession(sessionId: string, partial: Record<string, any>) {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem(`sharda_session_${sessionId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const updated = { ...parsed, ...partial };
+      localStorage.setItem(`sharda_session_${sessionId}`, JSON.stringify(updated));
+    }
+  } catch {}
+}
+
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  isRetry: boolean = false
 ): Promise<T> {
   const headers = { "Content-Type": "application/json", ...options.headers };
   const cleanPath = path.startsWith("/api") ? path : `/api${path}`;
@@ -11,7 +29,35 @@ async function request<T>(
   const res = await fetch(targetUrl, { ...options, headers });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || "Request failed");
+    const errorDetail = err.detail || "Request failed";
+
+    // Auto-sync session from localStorage if a stateless serverless container cold-starts
+    if (
+      !isRetry &&
+      typeof window !== "undefined" &&
+      res.status === 404 &&
+      errorDetail.toLowerCase().includes("session not found")
+    ) {
+      const sessionId = extractSessionId(path);
+      if (sessionId) {
+        const stored = localStorage.getItem(`sharda_session_${sessionId}`);
+        if (stored) {
+          try {
+            const sessionData = JSON.parse(stored);
+            const syncUrl = API_BASE ? `${API_BASE}/api/session/sync` : `/api/session/sync`;
+            await fetch(syncUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(sessionData),
+            });
+            // Retry the original request with hydrated session
+            return request<T>(path, options, true);
+          } catch {}
+        }
+      }
+    }
+
+    throw new Error(errorDetail);
   }
   return res.json();
 }
@@ -26,26 +72,72 @@ export async function uploadPDF(file: File) {
     reader.readAsDataURL(file);
   });
 
-  return request<{ session_id: string; tldr: string; concept_count: number }>(
-    "/upload/pdf_base64",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        base64_data: base64Data,
-        filename: file.name,
-      }),
-    }
-  );
+  const res = await request<{
+    session_id: string;
+    filename: string;
+    raw_text?: string;
+    tldr: string;
+    concept_count: number;
+  }>("/upload/pdf_base64", {
+    method: "POST",
+    body: JSON.stringify({
+      base64_data: base64Data,
+      filename: file.name,
+    }),
+  });
+
+  if (typeof window !== "undefined" && res.session_id) {
+    localStorage.setItem(
+      `sharda_session_${res.session_id}`,
+      JSON.stringify({
+        id: res.session_id,
+        filename: res.filename || file.name,
+        raw_text: res.raw_text || "",
+        tldr: res.tldr,
+        created_at: new Date().toISOString(),
+        flashcards: [],
+        quiz: [],
+        chat_history: [],
+        mastery: {},
+        card_mastery: {},
+      })
+    );
+  }
+
+  return res;
 }
 
 export async function uploadText(text: string, filename?: string) {
-  return request<{ session_id: string; tldr: string; concept_count: number }>(
-    "/upload/text",
-    {
-      method: "POST",
-      body: JSON.stringify({ text, filename: filename || "pasted_notes.txt" }),
-    }
-  );
+  const res = await request<{
+    session_id: string;
+    filename: string;
+    raw_text?: string;
+    tldr: string;
+    concept_count: number;
+  }>("/upload/text", {
+    method: "POST",
+    body: JSON.stringify({ text, filename: filename || "pasted_notes.txt" }),
+  });
+
+  if (typeof window !== "undefined" && res.session_id) {
+    localStorage.setItem(
+      `sharda_session_${res.session_id}`,
+      JSON.stringify({
+        id: res.session_id,
+        filename: res.filename || filename || "pasted_notes.txt",
+        raw_text: res.raw_text || text,
+        tldr: res.tldr,
+        created_at: new Date().toISOString(),
+        flashcards: [],
+        quiz: [],
+        chat_history: [],
+        mastery: {},
+        card_mastery: {},
+      })
+    );
+  }
+
+  return res;
 }
 
 // ── Session ─────────────────────────────────────────────────────────────────
@@ -55,21 +147,25 @@ export async function getSession(sessionId: string) {
 }
 
 export async function getSummary(sessionId: string) {
-  return request<{
+  const res = await request<{
     summary: string;
     tldr: string;
     concepts: Concept[];
   }>(`/session/${sessionId}/summary`);
+  updateLocalSession(sessionId, { summary: res.summary, tldr: res.tldr, concepts: res.concepts });
+  return res;
 }
 
 // ── Flashcards ───────────────────────────────────────────────────────────────
 
 export async function getFlashcards(sessionId: string) {
-  return request<{
+  const res = await request<{
     due: Flashcard[];
     not_due: Flashcard[];
     mastery: Record<string, number>;
   }>(`/session/${sessionId}/flashcards`);
+  updateLocalSession(sessionId, { flashcards: [...res.due, ...res.not_due], mastery: res.mastery });
+  return res;
 }
 
 export async function rateFlashcard(
@@ -86,9 +182,11 @@ export async function rateFlashcard(
 // ── Quiz ────────────────────────────────────────────────────────────────────
 
 export async function getQuiz(sessionId: string) {
-  return request<{ questions: QuizQuestion[] }>(
+  const res = await request<{ questions: QuizQuestion[] }>(
     `/session/${sessionId}/quiz`
   );
+  updateLocalSession(sessionId, { quiz: res.questions });
+  return res;
 }
 
 export async function gradeQuiz(
@@ -268,10 +366,12 @@ export interface ExamGradedResult {
 }
 
 export async function generateExam(sessionId: string, config: ExamConfig) {
-  return request<{ exam: ExamPaper }>(`/session/${sessionId}/exam/generate`, {
+  const res = await request<{ exam: ExamPaper }>(`/session/${sessionId}/exam/generate`, {
     method: "POST",
     body: JSON.stringify(config),
   });
+  updateLocalSession(sessionId, { active_exam: res.exam });
+  return res;
 }
 
 export async function getActiveExam(sessionId: string) {
@@ -293,7 +393,7 @@ export async function gradeExam(
 
 export interface NotesData {
   id: string;
-  style: "short" | "long" | "outline" | "glossary";
+  style: "short" | "long" | "outline" | "glossary" | "mindmap" | "both";
   title: string;
   markdown_content: string;
   key_takeaways: string[];
@@ -302,17 +402,22 @@ export interface NotesData {
 
 export async function generateNotes(
   sessionId: string,
-  style: "short" | "long" | "outline" | "glossary",
-  selectedTopics: string[] = []
+  styleOrConfig: string | { style: string; detail_level?: string; focus_topics?: string[] },
+  focusTopics?: string[]
 ) {
-  return request<{ notes: NotesData }>(`/session/${sessionId}/notes`, {
+  const config =
+    typeof styleOrConfig === "string"
+      ? { style: styleOrConfig, focus_topics: focusTopics || [] }
+      : styleOrConfig;
+
+  const res = await request<{ notes: NotesData }>(`/session/${sessionId}/notes`, {
     method: "POST",
-    body: JSON.stringify({ style, selected_topics: selectedTopics }),
+    body: JSON.stringify(config),
   });
+  updateLocalSession(sessionId, { notes: res.notes });
+  return res;
 }
 
 export async function getNotes(sessionId: string, style: string = "short") {
   return request<{ notes: NotesData | null }>(`/session/${sessionId}/notes?style=${style}`);
 }
-
-

@@ -45,6 +45,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       session_id: sessionId,
       filename,
+      raw_text: session.raw_text,
       tldr: session.tldr,
       concept_count: 0,
     });
