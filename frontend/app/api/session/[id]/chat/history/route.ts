@@ -9,5 +9,5 @@ export async function GET(
   const session = loadSession(id);
   if (!session) return NextResponse.json({ detail: "Session not found" }, { status: 404 });
 
-  return NextResponse.json({ exam: session.active_exam || null });
+  return NextResponse.json({ history: session.chat_history || [] });
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadSession, saveSession } from "@/lib/server/storage";
-import { generateJson } from "@/lib/server/gemini";
+import { generateExamPaper } from "@/lib/server/geminiService";
 
 export async function POST(
   req: Request,
@@ -8,50 +8,28 @@ export async function POST(
 ) {
   const { id } = await params;
   const session = loadSession(id);
-
-  if (!session) {
-    return NextResponse.json({ detail: "Session not found" }, { status: 404 });
-  }
+  if (!session) return NextResponse.json({ detail: "Session not found" }, { status: 404 });
 
   const body = await req.json();
-  const totalMarks = body.total_marks || 25;
-  const durationMinutes = body.duration_minutes || 20;
-
-  const prompt = `Create a custom Revision Exam Paper worth ${totalMarks} total marks based on this study material.
-Return JSON:
-{
-  "title": "Revision Exam Paper",
-  "total_marks": ${totalMarks},
-  "duration_minutes": ${durationMinutes},
-  "questions": [
-    {
-      "id": "q1",
-      "type": "mcq",
-      "marks": 2,
-      "question": "...",
-      "options": ["A", "B", "C", "D"],
-      "correct_answer": "...",
-      "explanation": "..."
-    },
-    {
-      "id": "q2",
-      "type": "short_answer",
-      "marks": 5,
-      "question": "...",
-      "explanation": "Key points..."
-    }
-  ]
-}
-
-STUDY MATERIAL:
-${session.raw_text.slice(0, 10000)}`;
+  const config = {
+    total_marks: body.total_marks || 25,
+    duration_minutes: body.duration_minutes || 20,
+    mcq_count: body.mcq_count || 3,
+    short_count: body.short_count || 2,
+    long_count: body.long_count || 1,
+    selected_topics: body.selected_topics || [],
+  };
 
   try {
-    const examPaper = await generateJson<any>(prompt, "You are Sharda, an expert exam creator.");
-    session.active_exam = examPaper;
+    const exam = await generateExamPaper(
+      session.raw_text,
+      session.concepts || [],
+      config
+    );
+    session.active_exam = exam;
     saveSession(session);
 
-    return NextResponse.json(examPaper);
+    return NextResponse.json({ exam });
   } catch (e: any) {
     return NextResponse.json(
       { detail: e.message || "Exam generation failed" },

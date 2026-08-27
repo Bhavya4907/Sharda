@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { loadSession } from "@/lib/server/storage";
-import { generateJson } from "@/lib/server/gemini";
+import { loadSession, saveSession } from "@/lib/server/storage";
+import { gradeQuiz } from "@/lib/server/geminiService";
 
 export async function POST(
   req: Request,
@@ -8,43 +8,30 @@ export async function POST(
 ) {
   const { id } = await params;
   const session = loadSession(id);
-
-  if (!session) {
-    return NextResponse.json({ detail: "Session not found" }, { status: 404 });
-  }
+  if (!session) return NextResponse.json({ detail: "Session not found" }, { status: 404 });
 
   const body = await req.json();
-  const { question_id, user_answer } = body;
+  const answers = body.answers || {};
 
-  const question = (session.quiz || []).find((q: any) => q.id === question_id);
-  if (!question) {
-    return NextResponse.json({ detail: "Question not found" }, { status: 404 });
+  if (!session.quiz || session.quiz.length === 0) {
+    return NextResponse.json({ detail: "No quiz generated yet" }, { status: 400 });
   }
 
-  if (question.type === "mcq") {
-    const isCorrect = user_answer.trim().toLowerCase() === question.correct_answer.trim().toLowerCase();
-    return NextResponse.json({
-      score: isCorrect ? 100 : 0,
-      feedback: isCorrect ? "Correct!" : `Incorrect. Correct answer is: ${question.correct_answer}`,
-      model_answer: question.correct_answer,
-    });
+  const results = await gradeQuiz(session.quiz, answers);
+
+  session.mastery = session.mastery || {};
+  for (const q of session.quiz) {
+    const res = results[q.id];
+    if (res) {
+      const current = session.mastery[q.topic] || 0.5;
+      session.mastery[q.topic] = Math.round((current * 0.6 + res.score * 0.4) * 100) / 100;
+    }
   }
 
-  try {
-    const prompt = `Grade this student's short answer response.
-QUESTION: ${question.question}
-EXPECTED KEY POINTS: ${question.explanation || ""}
-STUDENT ANSWER: ${user_answer}
+  saveSession(session);
 
-Return JSON: {"score": 0..100, "feedback": "...", "model_answer": "..."}`;
-
-    const res = await generateJson<any>(prompt, "You are Sharda, a constructive AI grader.");
-    return NextResponse.json(res);
-  } catch {
-    return NextResponse.json({
-      score: 70,
-      feedback: "Answer received and recorded.",
-      model_answer: question.explanation || "",
-    });
-  }
+  return NextResponse.json({
+    results,
+    mastery: session.mastery,
+  });
 }

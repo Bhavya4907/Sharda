@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadSession, saveSession } from "@/lib/server/storage";
-import { generateJson } from "@/lib/server/gemini";
+import { generateCustomNotes } from "@/lib/server/geminiService";
 
 export async function POST(
   req: Request,
@@ -8,38 +8,27 @@ export async function POST(
 ) {
   const { id } = await params;
   const session = loadSession(id);
-
-  if (!session) {
-    return NextResponse.json({ detail: "Session not found" }, { status: 404 });
-  }
+  if (!session) return NextResponse.json({ detail: "Session not found" }, { status: 404 });
 
   const body = await req.json();
-  const noteStyle = body.note_style || "both"; // short, long, mindmap, glossary, both
-
-  const prompt = `Generate comprehensive AI Notes for this study material.
-Requested Style: ${noteStyle}
-
-Return JSON:
-{
-  "short_notes": "High-yield bulleted summary with core takeaways...",
-  "long_notes": "Detailed in-depth notes with markdown headers, section breakdowns, and explanations...",
-  "mindmap_outline": "- Root Topic\\n  - Branch 1\\n    - Subtopic",
-  "key_glossary": [
-    {"term": "...", "definition": "..."}
-  ]
-}
-
-STUDY MATERIAL:
-${session.raw_text.slice(0, 10000)}`;
+  const config = {
+    style: body.style || "short",
+    detail_level: body.detail_level || "standard",
+    focus_topics: body.focus_topics || [],
+  };
 
   try {
-    const notesData = await generateJson<any>(prompt, "You are Sharda, a master note-taker.");
+    const notesData = await generateCustomNotes(
+      session.raw_text,
+      session.concepts || [],
+      config
+    );
 
     session.generated_notes = session.generated_notes || {};
-    session.generated_notes[noteStyle] = notesData;
+    session.generated_notes[config.style] = notesData;
     saveSession(session);
 
-    return NextResponse.json(notesData);
+    return NextResponse.json({ notes: notesData });
   } catch (e: any) {
     return NextResponse.json(
       { detail: e.message || "Notes generation failed" },
@@ -54,10 +43,11 @@ export async function GET(
 ) {
   const { id } = await params;
   const session = loadSession(id);
+  if (!session) return NextResponse.json({ detail: "Session not found" }, { status: 404 });
 
-  if (!session) {
-    return NextResponse.json({ detail: "Session not found" }, { status: 404 });
-  }
+  const url = new URL(req.url);
+  const style = url.searchParams.get("style") || "short";
 
-  return NextResponse.json(session.generated_notes || {});
+  const notes = session.generated_notes?.[style] || null;
+  return NextResponse.json({ notes });
 }

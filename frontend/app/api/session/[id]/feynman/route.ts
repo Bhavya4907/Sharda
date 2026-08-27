@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadSession, saveSession } from "@/lib/server/storage";
-import { generateJson } from "@/lib/server/gemini";
+import { gradeFeynman } from "@/lib/server/geminiService";
 
 export async function POST(
   req: Request,
@@ -8,35 +8,20 @@ export async function POST(
 ) {
   const { id } = await params;
   const session = loadSession(id);
-
-  if (!session) {
-    return NextResponse.json({ detail: "Session not found" }, { status: 404 });
-  }
+  if (!session) return NextResponse.json({ detail: "Session not found" }, { status: 404 });
 
   const body = await req.json();
   const { concept_id, explanation } = body;
 
   const concept = (session.concepts || []).find((c: any) => c.id === concept_id) || {
     id: concept_id,
-    title: concept_id,
+    name: concept_id,
     description: "",
+    related: [],
   };
 
-  const prompt = `Evaluate the student's explanation using the Feynman Technique.
-CONCEPT: ${concept.title} - ${concept.description}
-STUDY MATERIAL CONTEXT: ${session.raw_text.slice(0, 5000)}
-STUDENT'S EXPLANATION: ${explanation}
-
-Grade strictly:
-- score: 0..100 (100 = explained simply without jargon)
-- misconceptions: list of wrong statements or invalid analogies
-- missing_points: key sub-concepts missed
-- model_explanation: simple 2-sentence Feynman explanation
-
-Return JSON: {"score": 0..100, "misconceptions": [...], "missing_points": [...], "model_explanation": "..."}`;
-
   try {
-    const evalData = await generateJson<any>(prompt, "You are Sharda, a Feynman technique evaluator.");
+    const evalData = await gradeFeynman(concept, session.raw_text, explanation);
 
     session.feynman_scores = session.feynman_scores || {};
     session.feynman_scores[concept_id] = evalData.score;

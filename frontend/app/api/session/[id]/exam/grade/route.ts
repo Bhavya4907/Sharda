@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { loadSession } from "@/lib/server/storage";
-import { generateJson } from "@/lib/server/gemini";
+import { loadSession, saveSession } from "@/lib/server/storage";
+import { gradeExamPaper } from "@/lib/server/geminiService";
 
 export async function POST(
   req: Request,
@@ -8,51 +8,39 @@ export async function POST(
 ) {
   const { id } = await params;
   const session = loadSession(id);
-
-  if (!session) {
-    return NextResponse.json({ detail: "Session not found" }, { status: 404 });
-  }
+  if (!session) return NextResponse.json({ detail: "Session not found" }, { status: 404 });
 
   const body = await req.json();
-  const { answers, time_spent_seconds, tab_switch_violations } = body;
+  const answers = body.answers || {};
+  const violationsCount = body.violations_count ?? body.tab_switch_violations ?? 0;
   const exam = session.active_exam;
 
   if (!exam) {
-    return NextResponse.json({ detail: "No active exam found" }, { status: 400 });
+    return NextResponse.json({ detail: "No active exam found to grade" }, { status: 400 });
   }
 
-  const prompt = `Grade this student's completed exam paper based on the answer key.
-EXAM PAPER:
-${JSON.stringify(exam)}
-
-STUDENT SUBMISSION ANSWERS:
-${JSON.stringify(answers)}
-VIOLATIONS DETECTED: ${tab_switch_violations || 0}
-
-Return JSON:
-{
-  "total_score": 0..${exam.total_marks},
-  "max_marks": ${exam.total_marks},
-  "percentage": 0..100,
-  "time_taken_formatted": "...",
-  "violations_penalty": ${tab_switch_violations || 0},
-  "grade_letter": "A|B|C|D|F",
-  "feedback_summary": "...",
-  "question_breakdown": [
-    {
-      "question_id": "q1",
-      "marks_awarded": 2,
-      "max_marks": 2,
-      "user_answer": "...",
-      "model_answer": "...",
-      "feedback": "..."
-    }
-  ]
-}`;
-
   try {
-    const evalData = await generateJson<any>(prompt, "You are Sharda, a strict exam examiner.");
-    return NextResponse.json(evalData);
+    const results = await gradeExamPaper(
+      exam.questions,
+      answers,
+      violationsCount
+    );
+
+    session.mastery = session.mastery || {};
+    for (const q of exam.questions) {
+      const qResult = results.graded_questions?.[q.id];
+      if (qResult) {
+        const earned = qResult.earned_marks || 0;
+        const maxM = qResult.max_marks || 1;
+        const ratio = earned / maxM;
+        const current = session.mastery[q.topic] || 0.5;
+        session.mastery[q.topic] = Math.round((current * 0.5 + ratio * 0.5) * 100) / 100;
+      }
+    }
+
+    saveSession(session);
+
+    return NextResponse.json(results);
   } catch (e: any) {
     return NextResponse.json(
       { detail: e.message || "Exam grading failed" },

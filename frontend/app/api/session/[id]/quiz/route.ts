@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadSession, saveSession } from "@/lib/server/storage";
-import { generateJson } from "@/lib/server/gemini";
+import { generateQuiz } from "@/lib/server/geminiService";
 
 export async function GET(
   req: Request,
@@ -8,37 +8,15 @@ export async function GET(
 ) {
   const { id } = await params;
   const session = loadSession(id);
-
-  if (!session) {
-    return NextResponse.json({ detail: "Session not found" }, { status: 404 });
-  }
+  if (!session) return NextResponse.json({ detail: "Session not found" }, { status: 404 });
 
   if (!session.quiz || session.quiz.length === 0) {
     try {
-      const prompt = `Generate 5 high-yield quiz questions (3 MCQ and 2 Short Answer) from this study material.
-Return JSON array:
-[
-  {
-    "id": "q1",
-    "type": "mcq",
-    "question": "...",
-    "options": ["A", "B", "C", "D"],
-    "correct_answer": "...",
-    "explanation": "..."
-  },
-  {
-    "id": "q4",
-    "type": "short_answer",
-    "question": "...",
-    "explanation": "Key points required: ..."
-  }
-]
-
-STUDY MATERIAL:
-${session.raw_text.slice(0, 10000)}`;
-
-      const quiz = await generateJson<any[]>(prompt, "You are Sharda, an expert quiz creator.");
-      session.quiz = quiz;
+      const questions = await generateQuiz(
+        session.raw_text,
+        session.concepts || []
+      );
+      session.quiz = questions;
       saveSession(session);
     } catch (e: any) {
       return NextResponse.json(
@@ -48,5 +26,5 @@ ${session.raw_text.slice(0, 10000)}`;
     }
   }
 
-  return NextResponse.json(session.quiz);
+  return NextResponse.json({ questions: session.quiz });
 }
