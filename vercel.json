@@ -11,31 +11,35 @@
   },
   "rewrites": [
     {
-      "source": "/upload(/.*)?",
+      "source": "/upload/:path*",
       "destination": {
         "type": "service",
-        "service": "backend"
+        "service": "backend",
+        "endpoint": "/upload/:path*"
       }
     },
     {
-      "source": "/session(/.*)?",
+      "source": "/session/:path*",
       "destination": {
         "type": "service",
-        "service": "backend"
+        "service": "backend",
+        "endpoint": "/session/:path*"
       }
     },
     {
       "source": "/health",
       "destination": {
         "type": "service",
-        "service": "backend"
+        "service": "backend",
+        "endpoint": "/health"
       }
     },
     {
-      "source": "/api-backend(/.*)?",
+      "source": "/api-backend/:path*",
       "destination": {
         "type": "service",
-        "service": "backend"
+        "service": "backend",
+        "endpoint": "/:path*"
       }
     },
     {
