@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { uploadPDF, uploadText } from "@/lib/api";
+import { extractTextFromPDFClient } from "@/lib/pdfClient";
 
 export default function HomePage() {
   const router = useRouter();
@@ -17,10 +18,27 @@ export default function HomePage() {
       setLoading(true);
       setError("");
       try {
+        // Primary: Upload PDF to backend
         const res = await uploadPDF(file);
         router.push(`/study/${res.session_id}`);
-      } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : "Upload failed");
+      } catch (primaryErr: unknown) {
+        // Fallback: Extract PDF text client-side in browser & submit JSON text
+        try {
+          const clientText = await extractTextFromPDFClient(file);
+          if (clientText && clientText.length >= 20) {
+            const res = await uploadText(clientText, file.name);
+            router.push(`/study/${res.session_id}`);
+            return;
+          }
+        } catch {
+          // Ignore fallback error
+        }
+
+        setError(
+          primaryErr instanceof Error
+            ? primaryErr.message
+            : "Upload failed. Please try pasting your text in the 'Paste Text' tab."
+        );
         setLoading(false);
       }
     },
