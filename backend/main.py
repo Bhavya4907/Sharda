@@ -44,6 +44,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 # ─── Upload ───────────────────────────────────────────────────────────────────
 
 @app.post("/upload/pdf")
+@app.post("/pdf")
+@app.post("/api-backend/upload/pdf")
 async def upload_pdf(file: UploadFile = File(...)):
     """Upload a PDF file and create a new study session."""
     if not file.filename.lower().endswith(".pdf"):
@@ -53,19 +55,25 @@ async def upload_pdf(file: UploadFile = File(...)):
     if len(file_bytes) > 20 * 1024 * 1024:  # 20 MB limit
         raise HTTPException(400, "File too large (max 20 MB)")
 
-    text = pdf_parser.parse_pdf(file_bytes)
-    if len(text) < 100:
-        raise HTTPException(422, "Could not extract enough text from this PDF")
+    try:
+        text = pdf_parser.parse_pdf(file_bytes)
+    except Exception as e:
+        raise HTTPException(400, f"Failed to parse PDF: {str(e)}")
+
+    if not text or len(text.strip()) < 20:
+        raise HTTPException(422, "Could not extract text from this PDF (it may be image-only or scanned)")
 
     return _create_session(text, file.filename)
 
 
 @app.post("/upload/text")
+@app.post("/text")
+@app.post("/api-backend/upload/text")
 async def upload_text(body: UploadTextRequest):
     """Upload pasted text and create a new study session."""
     text = pdf_parser.parse_text(body.text)
-    if len(text) < 100:
-        raise HTTPException(422, "Text is too short (minimum 100 characters)")
+    if len(text) < 20:
+        raise HTTPException(422, "Text is too short (minimum 20 characters)")
     return _create_session(text, body.filename)
 
 
