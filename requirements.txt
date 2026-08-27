@@ -1,8 +1,7 @@
-pypdf
 fastapi
-uvicorn[standard]
-python-multipart
+pypdf
 google-genai>=2.0.0
 pydantic>=2.10
 python-dotenv
 aiofiles
+python-multipart
