@@ -5,8 +5,9 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const headers = { "Content-Type": "application/json", ...options.headers };
+  const apiPath = path.startsWith("/api") ? path : `/api${path}`;
+  const targetUrl = API_BASE ? `${API_BASE}${path}` : apiPath;
   try {
-    const targetUrl = API_BASE ? `${API_BASE}${path}` : path;
     const res = await fetch(targetUrl, { ...options, headers });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
@@ -15,7 +16,7 @@ async function request<T>(
     return res.json();
   } catch (e: unknown) {
     if (typeof window !== "undefined" && !process.env.NEXT_PUBLIC_API_URL) {
-      const proxyRes = await fetch(`/api-backend${path}`, { ...options, headers });
+      const proxyRes = await fetch(apiPath, { ...options, headers });
       if (!proxyRes.ok) {
         const err = await proxyRes.json().catch(() => ({ detail: proxyRes.statusText }));
         throw new Error(err.detail || "Request failed");

@@ -1,6 +1,0 @@
-fastapi
-pypdf
-pydantic>=2.10
-python-dotenv
-aiofiles
-python-multipart

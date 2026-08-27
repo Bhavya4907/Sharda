@@ -1,13 +1,13 @@
 """
-All Gemini API interactions for Prometheus.
-Uses google-genai SDK with Gemini 2.5 Flash (free tier).
+All Gemini API interactions for Sharda.
+Uses lightweight urllib REST calls to Gemini API (0 MB binary dependencies).
 """
 import json
 import os
 import uuid
+import urllib.request
+import urllib.error
 from datetime import datetime
-from google import genai
-from google.genai import types
 from dotenv import load_dotenv
 
 from models.schemas import (
@@ -18,50 +18,65 @@ from models.schemas import (
 
 load_dotenv()
 
-_client: genai.Client | None = None
-MODEL = "gemini-3.5-flash-lite"
+MODEL = "gemini-1.5-flash"
 
 
-def _get_client() -> genai.Client:
-    global _client
-    if _client is None:
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise ValueError(
-                "GEMINI_API_KEY is not set. "
-                "Copy backend/.env.example to backend/.env and add your key from https://aistudio.google.com"
-            )
-        _client = genai.Client(api_key=api_key)
-    return _client
+def _call_gemini_rest(prompt: str, system: str = "", json_mode: bool = False) -> str:
+    """Zero-dependency REST call to Google AI Studio Gemini API."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError(
+            "GEMINI_API_KEY is not set. "
+            "Please add GEMINI_API_KEY to your environment variables from https://aistudio.google.com"
+        )
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={api_key}"
+
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}]
+    }
+
+    if system:
+        payload["systemInstruction"] = {"parts": [{"text": system}]}
+
+    gen_config = {"temperature": 0.3}
+    if json_mode:
+        gen_config["responseMimeType"] = "application/json"
+
+    payload["generationConfig"] = gen_config
+
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST"
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+            candidates = body.get("candidates", [])
+            if candidates:
+                parts = candidates[0].get("content", {}).get("parts", [])
+                if parts:
+                    return parts[0].get("text", "").strip()
+            return ""
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8")
+        raise RuntimeError(f"Gemini API error ({e.code}): {err_body}")
 
 
 def _generate(prompt: str, system: str = "") -> str:
-    """Low-level text generation helper."""
-    config = types.GenerateContentConfig(
-        system_instruction=system if system else None,
-        temperature=0.4,
-    )
-    response = _get_client().models.generate_content(
-        model=MODEL,
-        contents=prompt,
-        config=config,
-    )
-    return response.text.strip()
+    """Generate plain text output from Gemini."""
+    return _call_gemini_rest(prompt, system=system, json_mode=False)
 
 
 def _json_generate(prompt: str, system: str = "") -> dict | list:
     """Generate and parse JSON output from Gemini."""
-    config = types.GenerateContentConfig(
-        system_instruction=system if system else None,
-        temperature=0.3,
-        response_mime_type="application/json",
-    )
-    response = _get_client().models.generate_content(
-        model=MODEL,
-        contents=prompt,
-        config=config,
-    )
-    return json.loads(response.text.strip())
+    raw = _call_gemini_rest(prompt, system=system, json_mode=True)
+    clean = raw.replace("```json", "").replace("```", "").strip()
+    return json.loads(clean)
 
 
 # ─── Summary & Concepts ──────────────────────────────────────────────────────
