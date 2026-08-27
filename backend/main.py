@@ -8,10 +8,22 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+import os
+import tempfile
+
+# Force tempfile directory to /tmp for serverless read-only filesystems (Vercel)
+try:
+    tempfile.tempdir = "/tmp"
+    os.environ["TMPDIR"] = "/tmp"
+    os.environ["TEMP"] = "/tmp"
+    os.environ["TMP"] = "/tmp"
+except Exception:
+    pass
+
 from models.schemas import (
     SessionData, ChatMessage,
     ChatRequest, FeynmanRequest, QuizGradeRequest, FlashcardRateRequest,
-    UploadTextRequest, ExamConfig, ExamSubmissionRequest, NotesRequest,
+    UploadTextRequest, UploadBase64PDFRequest, ExamConfig, ExamSubmissionRequest, NotesRequest,
 )
 from services import pdf_parser, gemini_service, storage
 from services.spaced_repetition import update_card, mastery_from_cards
@@ -74,6 +86,34 @@ async def upload_text(body: UploadTextRequest):
     text = pdf_parser.parse_text(body.text)
     if len(text) < 20:
         raise HTTPException(422, "Text is too short (minimum 20 characters)")
+    return _create_session(text, body.filename)
+
+
+@app.post("/upload/pdf_base64")
+@app.post("/pdf_base64")
+@app.post("/api-backend/upload/pdf_base64")
+async def upload_pdf_base64(body: UploadBase64PDFRequest):
+    """Upload a base64 encoded PDF — avoids multipart form-data issues on serverless."""
+    import base64
+    try:
+        raw_b64 = body.base64_data
+        if "," in raw_b64:
+            raw_b64 = raw_b64.split(",", 1)[1]
+        file_bytes = base64.b64decode(raw_b64)
+    except Exception as e:
+        raise HTTPException(400, f"Invalid base64 encoding: {str(e)}")
+
+    if len(file_bytes) > 20 * 1024 * 1024:
+        raise HTTPException(400, "File too large (max 20 MB)")
+
+    try:
+        text = pdf_parser.parse_pdf(file_bytes)
+    except Exception as e:
+        raise HTTPException(400, f"Failed to parse PDF: {str(e)}")
+
+    if not text or len(text.strip()) < 20:
+        raise HTTPException(422, "Could not extract text from this PDF (it may be image-only or scanned)")
+
     return _create_session(text, body.filename)
 
 

@@ -29,30 +29,23 @@ async function request<T>(
 // ── Upload ──────────────────────────────────────────────────────────────────
 
 export async function uploadPDF(file: File) {
-  const form = new FormData();
-  form.append("file", file);
-  const targetUrl = API_BASE ? `${API_BASE}/upload/pdf` : "/upload/pdf";
-  try {
-    const res = await fetch(targetUrl, {
+  const base64Data = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (e) => reject(e);
+    reader.readAsDataURL(file);
+  });
+
+  return request<{ session_id: string; tldr: string; concept_count: number }>(
+    "/upload/pdf_base64",
+    {
       method: "POST",
-      body: form,
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(err.detail || "Upload failed");
+      body: JSON.stringify({
+        base64_data: base64Data,
+        filename: file.name,
+      }),
     }
-    return res.json();
-  } catch {
-    const proxyRes = await fetch(`/api-backend/upload/pdf`, {
-      method: "POST",
-      body: form,
-    });
-    if (!proxyRes.ok) {
-      const err = await proxyRes.json().catch(() => ({ detail: proxyRes.statusText }));
-      throw new Error(err.detail || "Upload failed");
-    }
-    return proxyRes.json();
-  }
+  );
 }
 
 export async function uploadText(text: string, filename?: string) {

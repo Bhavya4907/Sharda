@@ -66,6 +66,11 @@ class UploadTextRequest(BaseModel):
     filename: str = "pasted_notes.txt"
 
 
+class UploadBase64PDFRequest(BaseModel):
+    base64_data: str
+    filename: str = "document.pdf"
+
+
 class ChatRequest(BaseModel):
     message: str
 
