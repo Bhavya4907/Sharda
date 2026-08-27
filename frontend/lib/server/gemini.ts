@@ -78,3 +78,64 @@ export async function generateJson<T>(
   const clean = raw.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
   return JSON.parse(clean) as T;
 }
+
+export async function extractTextFromPdfBase64(base64Data: string): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not set.");
+  }
+
+  const cleanB64 = base64Data.includes(",") ? base64Data.split(",")[1] : base64Data;
+  const prompt = "Transcribe and extract all textual, conceptual, and lecture content from this PDF document into comprehensive, clean Markdown notes with proper headings, equations, and bullet points.";
+
+  let lastError: Error | null = null;
+
+  for (const model of CANDIDATE_MODELS) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const payload = {
+        contents: [
+          {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: "application/pdf",
+                  data: cleanB64,
+                },
+              },
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
+      };
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        lastError = new Error(`Gemini PDF parse error (${res.status}): ${errText}`);
+        continue;
+      }
+
+      const data = await res.json();
+      const candidates = data.candidates || [];
+      if (candidates.length > 0) {
+        const parts = candidates[0].content?.parts || [];
+        if (parts.length > 0) {
+          const text = parts[0].text.trim();
+          if (text.length > 10) return text;
+        }
+      }
+    } catch (e: any) {
+      lastError = e;
+    }
+  }
+
+  throw lastError || new Error("Could not extract readable text from PDF.");
+}

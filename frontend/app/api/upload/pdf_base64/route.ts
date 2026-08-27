@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { saveSession } from "@/lib/server/storage";
+import { extractTextFromPdfBase64 } from "@/lib/server/gemini";
 import { randomUUID } from "crypto";
 
 export async function POST(req: Request) {
@@ -8,21 +9,19 @@ export async function POST(req: Request) {
     const rawB64 = body.base64_data || "";
     const filename = body.filename || "document.pdf";
 
-    // Clean base64 prefix
-    const cleanB64 = rawB64.includes(",") ? rawB64.split(",")[1] : rawB64;
-    const buffer = Buffer.from(cleanB64, "base64");
-    const rawText = buffer.toString("latin1");
-
-    // Extract printable text characters
-    const textMatches = rawText.replace(/[^\x20-\x7E\n\r]/g, " ");
-    const words = textMatches
-      .split(/\s+/)
-      .filter((w) => w.length >= 2 && /^[a-zA-Z0-9.,!?'"-]+$/.test(w));
-    const extractedText = words.join(" ");
-
-    if (extractedText.length < 20) {
+    if (!rawB64 || rawB64.length < 50) {
       return NextResponse.json(
-        { detail: "Could not extract text from this PDF (it may be image-only or scanned)" },
+        { detail: "No valid PDF data received" },
+        { status: 400 }
+      );
+    }
+
+    // Use Gemini's multimodal PDF understanding to extract clean, rich Markdown
+    const extractedText = await extractTextFromPdfBase64(rawB64);
+
+    if (!extractedText || extractedText.length < 20) {
+      return NextResponse.json(
+        { detail: "Could not extract text from this PDF (it may be empty or unreadable)" },
         { status: 422 }
       );
     }
@@ -51,7 +50,7 @@ export async function POST(req: Request) {
     });
   } catch (e: any) {
     return NextResponse.json(
-      { detail: e.message || "Upload failed" },
+      { detail: e.message || "PDF processing failed" },
       { status: 500 }
     );
   }
