@@ -1,8 +1,12 @@
 /**
  * Server-side Gemini REST API Helper for Next.js Route Handlers.
- * Zero external dependencies — uses standard fetch API.
+ * Zero external dependencies — uses standard fetch API with robust multi-model fallback.
  */
-const GEMINI_MODEL = "gemini-1.5-flash";
+const CANDIDATE_MODELS = [
+  "gemini-3.6-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-3.7-flash",
+];
 
 export async function callGeminiRest(
   prompt: string,
@@ -16,43 +20,54 @@ export async function callGeminiRest(
     );
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+  let lastError: Error | null = null;
 
-  const payload: any = {
-    contents: [{ parts: [{ text: prompt }] }],
-  };
+  for (const model of CANDIDATE_MODELS) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-  if (systemInstruction) {
-    payload.systemInstruction = { parts: [{ text: systemInstruction }] };
-  }
+      const payload: any = {
+        contents: [{ parts: [{ text: prompt }] }],
+      };
 
-  const genConfig: any = { temperature: 0.3 };
-  if (jsonMode) {
-    genConfig.responseMimeType = "application/json";
-  }
+      if (systemInstruction) {
+        payload.systemInstruction = { parts: [{ text: systemInstruction }] };
+      }
 
-  payload.generationConfig = genConfig;
+      const genConfig: any = { temperature: 0.3 };
+      if (jsonMode) {
+        genConfig.responseMimeType = "application/json";
+      }
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+      payload.generationConfig = genConfig;
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Gemini API error (${res.status}): ${errText}`);
-  }
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-  const data = await res.json();
-  const candidates = data.candidates || [];
-  if (candidates.length > 0) {
-    const parts = candidates[0].content?.parts || [];
-    if (parts.length > 0) {
-      return parts[0].text.trim();
+      if (!res.ok) {
+        const errText = await res.text();
+        lastError = new Error(`Gemini API error (${res.status}): ${errText}`);
+        continue; // Try next candidate model
+      }
+
+      const data = await res.json();
+      const candidates = data.candidates || [];
+      if (candidates.length > 0) {
+        const parts = candidates[0].content?.parts || [];
+        if (parts.length > 0) {
+          return parts[0].text.trim();
+        }
+      }
+      return "";
+    } catch (e: any) {
+      lastError = e;
     }
   }
-  return "";
+
+  throw lastError || new Error("Failed to generate content from all Gemini models.");
 }
 
 export async function generateJson<T>(
