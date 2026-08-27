@@ -1,53 +1,34 @@
 {
-  "services": {
-    "frontend": {
-      "root": "frontend",
-      "framework": "nextjs"
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
     },
-    "backend": {
-      "root": "backend",
-      "entrypoint": "main.py"
+    {
+      "src": "frontend/package.json",
+      "use": "@vercel/next"
     }
-  },
-  "rewrites": [
+  ],
+  "routes": [
     {
-      "source": "/upload/:path*",
-      "destination": {
-        "type": "service",
-        "service": "backend",
-        "endpoint": "/upload/:path*"
-      }
+      "src": "/upload/(.*)",
+      "dest": "api/index.py"
     },
     {
-      "source": "/session/:path*",
-      "destination": {
-        "type": "service",
-        "service": "backend",
-        "endpoint": "/session/:path*"
-      }
+      "src": "/session/(.*)",
+      "dest": "api/index.py"
     },
     {
-      "source": "/health",
-      "destination": {
-        "type": "service",
-        "service": "backend",
-        "endpoint": "/health"
-      }
+      "src": "/health",
+      "dest": "api/index.py"
     },
     {
-      "source": "/api-backend/:path*",
-      "destination": {
-        "type": "service",
-        "service": "backend",
-        "endpoint": "/:path*"
-      }
+      "src": "/api-backend/(.*)",
+      "dest": "api/index.py"
     },
     {
-      "source": "/(.*)",
-      "destination": {
-        "type": "service",
-        "service": "frontend"
-      }
+      "src": "/(.*)",
+      "dest": "frontend/$1"
     }
   ]
 }
