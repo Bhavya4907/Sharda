@@ -8,7 +8,12 @@ from pathlib import Path
 from models.schemas import SessionData
 
 STORAGE_DIR = Path(__file__).parent.parent / "storage"
-STORAGE_DIR.mkdir(exist_ok=True)
+try:
+    STORAGE_DIR.mkdir(exist_ok=True)
+except Exception:
+    import tempfile
+    STORAGE_DIR = Path(tempfile.gettempdir()) / "sharda_storage"
+    STORAGE_DIR.mkdir(exist_ok=True)
 
 
 def save_session(session: SessionData) -> None:

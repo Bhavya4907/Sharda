@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 async function request<T>(
   path: string,
@@ -6,14 +6,14 @@ async function request<T>(
 ): Promise<T> {
   const headers = { "Content-Type": "application/json", ...options.headers };
   try {
-    const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    const targetUrl = API_BASE ? `${API_BASE}${path}` : path;
+    const res = await fetch(targetUrl, { ...options, headers });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
       throw new Error(err.detail || "Request failed");
     }
     return res.json();
   } catch (e: unknown) {
-    // Fallback retry via Next.js same-origin proxy if cross-port fetch fails
     if (typeof window !== "undefined" && !process.env.NEXT_PUBLIC_API_URL) {
       const proxyRes = await fetch(`/api-backend${path}`, { ...options, headers });
       if (!proxyRes.ok) {
@@ -31,8 +31,9 @@ async function request<T>(
 export async function uploadPDF(file: File) {
   const form = new FormData();
   form.append("file", file);
+  const targetUrl = API_BASE ? `${API_BASE}/upload/pdf` : "/upload/pdf";
   try {
-    const res = await fetch(`${API_BASE}/upload/pdf`, {
+    const res = await fetch(targetUrl, {
       method: "POST",
       body: form,
     });
