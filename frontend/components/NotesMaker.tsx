@@ -209,13 +209,13 @@ export default function NotesMaker({ sessionId, concepts }: Props) {
           </div>
 
           {/* Key Takeaways */}
-          {notes.key_takeaways.length > 0 && (
+          {((notes.key_takeaways?.length ?? 0) > 0) && (
             <div className="bg-gradient-to-r from-orange-950/30 to-amber-950/20 border border-orange-800/40 rounded-xl p-4 space-y-2">
               <h4 className="text-xs font-bold text-orange-400 uppercase tracking-wider">
                 💡 Key Takeaways
               </h4>
               <ul className="space-y-1 text-sm text-orange-200/90 list-disc list-inside">
-                {notes.key_takeaways.map((item, idx) => (
+                {(notes.key_takeaways || []).map((item, idx) => (
                   <li key={idx}>{item}</li>
                 ))}
               </ul>

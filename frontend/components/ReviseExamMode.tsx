@@ -573,7 +573,7 @@ export default function ReviseExamMode({ sessionId, concepts }: Props) {
           </div>
 
           {/* Weak Topics Identification */}
-          {results.topic_gaps.length > 0 && (
+          {((results.topic_gaps?.length ?? 0) > 0) && (
             <div className="bg-red-950/20 border border-red-800/50 rounded-2xl p-5 space-y-2">
               <h4 className="text-sm font-bold text-red-400 flex items-center gap-2">
                 <span>🎯 Topics Needing Immediate Revision</span>
@@ -582,9 +582,12 @@ export default function ReviseExamMode({ sessionId, concepts }: Props) {
                 You scored low on questions related to these concepts. Review them using Flashcards or Feynman Mode!
               </p>
               <div className="flex flex-wrap gap-2 pt-1">
-                {results.topic_gaps.map((topic) => (
-                  <span key={topic} className="text-xs bg-red-900/40 border border-red-800 text-red-300 font-medium px-3 py-1 rounded-full">
-                    {topic}
+                {(results.topic_gaps || []).map((topic) => (
+                  <span
+                    key={topic}
+                    className="bg-red-900/40 border border-red-700/60 text-red-300 text-xs px-2.5 py-1 rounded-lg font-medium"
+                  >
+                    ⚠️ {topic}
                   </span>
                 ))}
               </div>

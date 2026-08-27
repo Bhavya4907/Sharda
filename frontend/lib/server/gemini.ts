@@ -89,29 +89,33 @@ export function safeJsonParse<T>(raw: string): T {
     return JSON.parse(str) as T;
   } catch {}
 
-  // Attempt 2: Walk string and escape unescaped control characters inside string literals
+  // Attempt 2: Walk string and fix unescaped control chars and invalid backslash escapes (like \alpha, \frac)
   let inString = false;
-  let escaped = false;
   let sanitized = "";
 
   for (let i = 0; i < str.length; i++) {
     const char = str[i];
-    if (escaped) {
-      sanitized += char;
-      escaped = false;
-      continue;
-    }
-    if (char === "\\") {
-      escaped = true;
-      sanitized += char;
-      continue;
-    }
-    if (char === '"') {
+    const prev = i > 0 ? str[i - 1] : "";
+
+    if (char === '"' && prev !== "\\") {
       inString = !inString;
       sanitized += char;
       continue;
     }
+
     if (inString) {
+      if (char === "\\") {
+        const nextChar = i + 1 < str.length ? str[i + 1] : "";
+        const isHexEscape = nextChar === "u" && /^[0-9a-fA-F]{4}/.test(str.slice(i + 2, i + 6));
+        const isValidJsonEscape = ['"', "\\", "/", "b", "f", "n", "r", "t"].includes(nextChar) || isHexEscape;
+
+        if (!isValidJsonEscape) {
+          // Double the backslash so \alpha or \frac becomes \\alpha or \\frac (valid JSON)
+          sanitized += "\\\\";
+          continue;
+        }
+      }
+
       if (char === "\n") {
         sanitized += "\\n";
         continue;
@@ -129,6 +133,7 @@ export function safeJsonParse<T>(raw: string): T {
         continue;
       }
     }
+
     sanitized += char;
   }
 

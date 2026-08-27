@@ -406,7 +406,7 @@ export async function generateCustomNotes(
   text: string,
   concepts: Concept[],
   config: { style: string; detail_level?: string; focus_topics?: string[] }
-): Promise<NotesData> {
+): Promise<any> {
   const prompt = `Generate structured, beautiful AI Study Notes from this material:
 STYLE: ${config.style}
 DETAIL LEVEL: ${config.detail_level || "standard"}
@@ -417,14 +417,29 @@ ${text.slice(0, 10000)}
 
 Return JSON:
 {
+  "id": "notes_${Date.now()}",
   "style": "${config.style}",
-  "markdown_content": "# Beautiful Markdown Notes with headers, tables, callouts, and key formulas",
+  "title": "Study Notes",
+  "markdown_content": "# Comprehensive Study Notes with headers, tables, callouts, and key formulas",
   "word_count": 500,
-  "key_formulas_terms": ["Term 1", "Formula 2"]
+  "key_takeaways": ["Takeaway 1", "Takeaway 2"],
+  "key_formulas_terms": ["Term 1", "Formula 2"],
+  "created_at": "${new Date().toISOString()}"
 }`;
 
-  return generateJson<NotesData>(
+  const notes = await generateJson<any>(
     prompt,
     "You are Sharda, a master note-taking expert."
   );
+
+  return {
+    id: notes.id || `notes_${Date.now()}`,
+    style: notes.style || config.style,
+    title: notes.title || "Study Notes",
+    markdown_content: notes.markdown_content || "",
+    word_count: notes.word_count || 0,
+    key_takeaways: notes.key_takeaways || notes.key_formulas_terms || [],
+    key_formulas_terms: notes.key_formulas_terms || notes.key_takeaways || [],
+    created_at: notes.created_at || new Date().toISOString(),
+  };
 }

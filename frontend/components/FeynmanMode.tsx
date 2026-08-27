@@ -112,27 +112,27 @@ export default function FeynmanMode({ sessionId, concepts }: Props) {
 
           {/* Breakdown */}
           <div className="grid gap-3">
-            {result.what_was_right.length > 0 && (
+            {((result.what_was_right?.length ?? 0) > 0) && (
               <div className="bg-green-900/20 border border-green-800/50 rounded-xl p-4">
                 <p className="text-green-400 font-semibold text-sm mb-2">✅ What you got right</p>
                 <ul className="text-sm text-green-300 space-y-1 list-disc list-inside">
-                  {result.what_was_right.map((x, i) => <li key={i}>{x}</li>)}
+                  {(result.what_was_right || []).map((x, i) => <li key={i}>{x}</li>)}
                 </ul>
               </div>
             )}
-            {result.what_was_missing.length > 0 && (
+            {((result.what_was_missing?.length ?? 0) > 0) && (
               <div className="bg-amber-900/20 border border-amber-800/50 rounded-xl p-4">
                 <p className="text-amber-400 font-semibold text-sm mb-2">⚠️ What was missing</p>
                 <ul className="text-sm text-amber-300 space-y-1 list-disc list-inside">
-                  {result.what_was_missing.map((x, i) => <li key={i}>{x}</li>)}
+                  {(result.what_was_missing || []).map((x, i) => <li key={i}>{x}</li>)}
                 </ul>
               </div>
             )}
-            {result.what_was_wrong.length > 0 && (
+            {((result.what_was_wrong?.length ?? 0) > 0) && (
               <div className="bg-red-900/20 border border-red-800/50 rounded-xl p-4">
                 <p className="text-red-400 font-semibold text-sm mb-2">❌ Misconceptions</p>
                 <ul className="text-sm text-red-300 space-y-1 list-disc list-inside">
-                  {result.what_was_wrong.map((x, i) => <li key={i}>{x}</li>)}
+                  {(result.what_was_wrong || []).map((x, i) => <li key={i}>{x}</li>)}
                 </ul>
               </div>
             )}
